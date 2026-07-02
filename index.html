@@ -191,6 +191,18 @@
                 </div>
                 
                 <button type="submit" class="w-full admin-gradient-theme text-white py-3.5 md:py-4 rounded-xl md:rounded-2xl font-bold text-sm md:text-base mt-2 transition hover:shadow-lg active:scale-95 shadow-md">เข้าสู่ระบบแอดมิน</button>
+                <!-- เส้นคั่น หรือ -->
+                <div class="flex items-center justify-center space-x-3 my-4">
+                    <div class="h-px bg-slate-300 w-full"></div>
+                    <span class="text-slate-500 font-semibold text-xs lang-txt" data-th="หรือ" data-en="OR">หรือ</span>
+                    <div class="h-px bg-slate-300 w-full"></div>
+                </div>
+
+                <!-- ปุ่ม Google แอดมิน -->
+                <button type="button" onclick="adminLoginWithGoogle()" class="w-full flex items-center justify-center gap-2 md:gap-3 bg-white border border-slate-200 text-slate-600 font-bold py-3.5 md:py-4 px-4 rounded-xl md:rounded-2xl transition hover:bg-slate-50 active:scale-95 text-sm shadow-sm mb-2">
+                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-4 h-4 md:w-5 md:h-5" alt="Google">
+                    <span class="lang-txt" data-th="เข้าสู่ระบบด้วย Google" data-en="Sign in with Google">เข้าสู่ระบบด้วย Google</span>
+                </button>
                 
                 <button type="button" onclick="toggleLoginView('student')" class="w-full bg-white text-slate-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl font-semibold text-sm transition hover:bg-slate-50 active:scale-95 shadow-sm border border-slate-200 flex items-center justify-center gap-2 mt-2">
                     <i class="fa-solid fa-arrow-left text-slate-400"></i> กลับหน้านักศึกษา
@@ -1082,6 +1094,50 @@ function loginWithGoogle() {
     });
 }
 
+// ==========================================
+// ระบบเข้าสู่ระบบแอดมินด้วย Google (ดึงสิทธิ์จาก Database)
+// ==========================================
+function adminLoginWithGoogle() {
+    let provider = new firebase.auth.GoogleAuthProvider();
+    Swal.fire({ title: 'กำลังตรวจสอบสิทธิ์แอดมิน...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    firebase.auth().signInWithPopup(provider).then((result) => {
+        let userEmail = result.user.email;
+        
+        // 🔒 ค้นหาในฐานข้อมูลว่าอีเมลนี้มีอยู่จริง และมี role เป็น "admin" หรือไม่
+        db.collection("Users").where("email", "==", userEmail).where("role", "==", "admin").get().then((snapshot) => {
+            Swal.close();
+            if (!snapshot.empty) {
+                // ✅ พบข้อมูล และเป็นแอดมินจริงๆ
+                let doc = snapshot.docs[0];
+                currentUser = doc.data();
+                currentUser.id = doc.id;
+                
+                // พาเข้าหน้าแผงควบคุม
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('adminSection').style.display = 'block';
+                loadAdmin(); 
+            } else {
+                // ❌ มีเมลใน Google แต่ไม่มีสิทธิ์แอดมินในฐานข้อมูล -> เตะออกทันที
+                firebase.auth().signOut();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'สิทธิ์ถูกปฏิเสธ',
+                    text: 'อีเมลนี้ไม่มีสิทธิ์เข้าถึงแผงควบคุมระบบ (Not an Admin)',
+                    confirmButtonColor: 'var(--primary-theme)',
+                    customClass: { popup: 'rounded-[2rem]' }
+                });
+            }
+        });
+    }).catch((error) => {
+        Swal.close();
+        if (error.code !== 'auth/popup-closed-by-user') {
+            console.error("Admin Google Error: ", error);
+            Swal.fire('ข้อผิดพลาด', 'เข้าสู่ระบบไม่สำเร็จ: ' + error.message, 'error');
+        }
+    });
+}
+        
 function showStudentDashboard() {
     Swal.close();
     document.getElementById('loginSection').style.display = 'none';
